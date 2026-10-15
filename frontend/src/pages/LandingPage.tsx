@@ -8,13 +8,11 @@ import {
   Bus,
   Search,
   Users,
-  CheckCircle2,
   Sparkles,
   MapPin,
   ShieldCheck,
   Compass,
   ArrowRight,
-  Wallet,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -28,30 +26,31 @@ export const LandingPage: React.FC = () => {
     setFilter,
     searchQuery,
     setSearchQuery,
-    triggerDemoStep,
   } = useShuttles();
 
   const [detailShuttle, setDetailShuttle] = useState<Shuttle | null>(null);
 
-  const activeCount = shuttles.filter((s) => s.gps_status === 'active').length;
-  const totalAvailableSeats = shuttles.reduce((acc, s) => acc + s.available_seats, 0);
+  const activeCount = shuttles.filter((s) => s.gps_status === 'active' || s.is_tracking_active).length;
 
   return (
     <div className="flex-1 space-y-10 pb-16">
       {/* Hero Header */}
       <section className="relative pt-10 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>VIT Vellore Smart Campus Mobility</span>
+            <span>VIT Vellore Smart Campus Transit</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-slate-100">
-            Live Shuttle Tracking & Real-Time Passenger Count
+            Track. Tap. Ride. <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-blue-500">
+              Live Campus Shuttle Transit
+            </span>
           </h1>
 
           <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-            Real-time GPS telemetry from driver mobile phones and automated directional passenger counting powered by ESP32 IR sensors aboard every campus shuttle.
+            Real-time SJT/PRP green route and Mens Hostel blue route tracking with live driver GPS telemetry and campus map visualizer.
           </p>
 
           {/* Quick Metrics Bar */}
@@ -62,11 +61,11 @@ export const LandingPage: React.FC = () => {
             </div>
             <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
               <span className="text-[11px] text-slate-400 font-medium">Active on Campus</span>
-              <div className="text-xl font-black text-emerald-400">{activeCount} Live</div>
+              <div className="text-xl font-black text-emerald-400">{activeCount} Live GPS</div>
             </div>
             <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
-              <span className="text-[11px] text-slate-400 font-medium">Total Open Seats</span>
-              <div className="text-xl font-black text-indigo-400">{totalAvailableSeats} Seats</div>
+              <span className="text-[11px] text-slate-400 font-medium">Transit Routes</span>
+              <div className="text-xl font-black text-indigo-400">3 Routes</div>
             </div>
           </div>
         </div>
@@ -81,7 +80,7 @@ export const LandingPage: React.FC = () => {
               <span>VIT Vellore Campus Map</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Exclusive campus geofenced view. Markers update live via Socket.IO WebSocket telemetry.
+              Live transit routes and rotating vehicle markers broadcasted in real time by shuttle drivers.
             </p>
           </div>
 
@@ -91,14 +90,14 @@ export const LandingPage: React.FC = () => {
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search shuttle (e.g. SH-01)..."
+                placeholder="Search vehicle or route..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 rounded-lg text-xs bg-slate-800/80 border border-slate-700 text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
               />
             </div>
 
-            <div className="flex items-center rounded-lg bg-slate-800/90 p-1 border border-slate-700 text-xs font-semibold">
+            <div className="flex items-center rounded-lg bg-slate-800/90 p-1 border border-slate-700 text-xs font-semibold overflow-x-auto">
               <button
                 onClick={() => setFilter('all')}
                 className={`px-2.5 py-1 rounded transition ${
@@ -113,15 +112,34 @@ export const LandingPage: React.FC = () => {
                   filter === 'active' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Active
+                Live GPS
               </button>
               <button
-                onClick={() => setFilter('available')}
-                className={`px-2.5 py-1 rounded transition ${
-                  filter === 'available' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                onClick={() => setFilter('route-a')}
+                className={`px-2.5 py-1 rounded transition flex items-center gap-1 ${
+                  filter === 'route-a' ? 'bg-[#16a34a] text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Available Seats
+                <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
+                Route A
+              </button>
+              <button
+                onClick={() => setFilter('route-b')}
+                className={`px-2.5 py-1 rounded transition flex items-center gap-1 ${
+                  filter === 'route-b' ? 'bg-[#2563eb] text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
+                Route B
+              </button>
+              <button
+                onClick={() => setFilter('route-c')}
+                className={`px-2.5 py-1 rounded transition flex items-center gap-1 ${
+                  filter === 'route-c' ? 'bg-[#eab308] text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#eab308]" />
+                Route C
               </button>
             </div>
           </div>
@@ -135,7 +153,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
               <Bus className="w-4 h-4 text-indigo-400" />
-              <span>Campus Shuttle (SH-01 • 30 Seats)</span>
+              <span>Campus Transit Fleet & Routes</span>
             </h3>
             <span className="text-xs text-slate-400 font-medium">
               Showing {filteredShuttles.length} of {shuttles.length} vehicle{shuttles.length === 1 ? '' : 's'}
@@ -156,7 +174,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Three User Role Portals */}
+      {/* Role Portals */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         <div className="text-center mb-6">
           <h2 className="text-xl font-extrabold text-slate-100">Role-Based Access</h2>
@@ -172,7 +190,7 @@ export const LandingPage: React.FC = () => {
             <div>
               <h4 className="text-base font-extrabold text-slate-100">VIT Student Access</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Verified registration strictly enforcing <code className="text-indigo-300">@vitstudent.ac.in</code>. View all 6 shuttles, passenger counts, and future ₹20 pass.
+                Verified registration strictly enforcing <code className="text-indigo-300">@vitstudent.ac.in</code>. View all transit shuttles, live route movements, and campus stops.
               </p>
             </div>
             <Link
@@ -212,7 +230,7 @@ export const LandingPage: React.FC = () => {
             <div>
               <h4 className="text-base font-extrabold text-slate-100">Outsiders & Visitors</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Public access with verified personal email. Track shuttle locations and passenger capacity without administrative privileges.
+                Public access with verified personal email. Track shuttle locations and campus transit routes in real time.
               </p>
             </div>
             <Link

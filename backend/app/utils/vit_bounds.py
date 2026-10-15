@@ -66,3 +66,48 @@ def validate_coordinates(lat: any, lng: any) -> tuple[bool, str, float, float]:
         return False, "Longitude must be between -180 and 180", 0.0, 0.0
 
     return True, "", lat_f, lng_f
+
+# Official Campus Shuttle Routes matching D:\tracking\VIT-SHUTTLE-TRACK-main
+VIT_CAMPUS_ROUTES = {
+    "A": {
+        "id": "A",
+        "name": "SJT / PRP Green Route",
+        "color": "#16a34a",
+        "waypoints": [
+            [12.9729, 79.1586],
+            [12.9715, 79.1608],
+            [12.9695, 79.1622],
+            [12.9678, 79.1637],
+            [12.9712, 79.1638],
+            [12.9729, 79.1586]
+        ]
+    },
+    "B": {
+        "id": "B",
+        "name": "Mens Hostel Blue Route",
+        "color": "#2563eb",
+        "waypoints": [
+            [12.9724, 79.1552],
+            [12.9709, 79.1531],
+            [12.9686, 79.1518],
+            [12.9669, 79.1507],
+            [12.9692, 79.1559],
+            [12.9724, 79.1552]
+        ]
+    },
+    "C": {
+        "id": "C",
+        "name": "Out of Campus Yellow Route",
+        "color": "#eab308",
+        "waypoints": [
+            [12.9692, 79.1559],
+            [12.9680, 79.1550],
+            [12.9670, 79.1540],
+            [12.9660, 79.1530],
+            [12.9675, 79.1520],
+            [12.9690, 79.1535],
+            [12.9700, 79.1550],
+            [12.9692, 79.1559]
+        ]
+    }
+}

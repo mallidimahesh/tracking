@@ -1,8 +1,7 @@
 import React from 'react';
 import { Shuttle } from '../types';
 import { StatusBadge } from './StatusBadge';
-import { OccupancyBar } from './OccupancyBar';
-import { Bus, MapPin, Gauge, Radio, Clock } from 'lucide-react';
+import { Bus, MapPin, Gauge, Clock, Compass } from 'lucide-react';
 
 interface ShuttleCardProps {
   shuttle: Shuttle;
@@ -24,6 +23,9 @@ export const ShuttleCard: React.FC<ShuttleCardProps> = ({
   };
 
   const isActive = shuttle.gps_status === 'active';
+  const routeCode = shuttle.route || 'A';
+  const routeColor = shuttle.route_color || '#16a34a';
+  const routeName = shuttle.route_name || (routeCode === 'A' ? 'SJT / PRP Green Route' : routeCode === 'B' ? 'Mens Hostel Blue Route' : 'Out of Campus Route');
 
   return (
     <div
@@ -33,41 +35,47 @@ export const ShuttleCard: React.FC<ShuttleCardProps> = ({
           ? 'border-indigo-500 shadow-indigo-500/20 shadow-lg ring-1 ring-indigo-500'
           : 'hover:border-slate-600 hover:shadow-lg'
       }`}
+      style={{ borderLeft: `4px solid ${routeColor}` }}
     >
-      {/* Header: Shuttle Code & Live Badges */}
+      {/* Header: Vehicle No & Route Badge */}
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm border ${
-              isActive
-                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                : 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}
+            className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-xs border"
+            style={{
+              backgroundColor: `${routeColor}20`,
+              color: routeColor,
+              borderColor: `${routeColor}50`,
+            }}
           >
-            {shuttle.shuttle_code}
+            {shuttle.vehicle_no || shuttle.shuttle_code}
           </div>
           <div>
-            <h4 className="font-bold text-slate-100 text-sm">{shuttle.name}</h4>
-            <p className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Bus className="w-3 h-3 text-slate-500" />
-              <span>Campus Transit Route</span>
+            <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+              <span>{shuttle.name}</span>
+            </h4>
+            <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: routeColor }}>
+              <Bus className="w-3 h-3" />
+              <span>{routeName}</span>
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
-          <StatusBadge status={shuttle.gps_status} type="gps" />
-          <StatusBadge status={shuttle.sensor_status} type="sensor" />
-        </div>
+        <StatusBadge status={shuttle.gps_status} type="gps" />
       </div>
 
-      {/* Occupancy Bar */}
-      <div className="my-3">
-        <OccupancyBar
-          current={shuttle.current_passenger_count}
-          capacity={shuttle.capacity}
-          percentage={shuttle.occupancy_percentage}
-        />
+      {/* Transit Route Pill */}
+      <div className="my-2.5 p-2 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: routeColor }}
+          />
+          <span className="font-semibold text-slate-200">Route {routeCode}</span>
+        </div>
+        <span className="text-[11px] text-slate-400">
+          {shuttle.driver?.name ? `Driver: ${shuttle.driver.name}` : 'Driver Assigned'}
+        </span>
       </div>
 
       {/* Telemetry Snapshot Row */}
@@ -79,6 +87,12 @@ export const ShuttleCard: React.FC<ShuttleCardProps> = ({
         <div className="flex items-center gap-1.5">
           <Gauge className="w-3.5 h-3.5 text-slate-500" />
           <span>{shuttle.gps_speed ? `${shuttle.gps_speed} km/h` : 'Stopped'}</span>
+          {shuttle.gps_heading !== undefined && shuttle.gps_heading !== null && (
+            <span className="text-[10px] text-slate-500 flex items-center ml-1">
+              <Compass className="w-3 h-3 mr-0.5" />
+              {Math.round(shuttle.gps_heading)}°
+            </span>
+          )}
         </div>
       </div>
 
@@ -107,3 +121,4 @@ export const ShuttleCard: React.FC<ShuttleCardProps> = ({
     </div>
   );
 };
+

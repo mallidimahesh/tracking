@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shuttle, ShuttleDetail } from '../types';
 import { api } from '../services/api';
 import { StatusBadge } from './StatusBadge';
-import { OccupancyBar } from './OccupancyBar';
-import { X, Bus, Radio, Gauge, Navigation, ShieldCheck, Wallet, Clock, Activity } from 'lucide-react';
+import { X, Bus, Gauge, Navigation, Radio, Clock, MapPin, Compass } from 'lucide-react';
 
 interface ShuttleDetailModalProps {
   shuttle: Shuttle | null;
@@ -42,19 +41,31 @@ export const ShuttleDetailModal: React.FC<ShuttleDetailModalProps> = ({ shuttle,
   if (!shuttle) return null;
 
   const current = details || shuttle;
+  const routeCode = current.route || 'A';
+  const routeColor = current.route_color || '#16a34a';
+  const routeName = current.route_name || (routeCode === 'A' ? 'SJT / PRP Green Route' : routeCode === 'B' ? 'Mens Hostel Blue Route' : 'Out of Campus Route');
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
       <div className="glass-card w-full max-w-xl rounded-2xl border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60" style={{ borderLeft: `6px solid ${routeColor}` }}>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center font-black text-lg text-indigo-300">
-              {current.shuttle_code}
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm border"
+              style={{
+                backgroundColor: `${routeColor}25`,
+                color: routeColor,
+                borderColor: `${routeColor}60`,
+              }}
+            >
+              {current.vehicle_no || current.shuttle_code}
             </div>
             <div>
               <h3 className="font-extrabold text-slate-100 text-lg">{current.name}</h3>
-              <p className="text-xs text-slate-400">VIT Vellore Campus Transit Shuttle</p>
+              <p className="text-xs font-semibold" style={{ color: routeColor }}>
+                {routeName}
+              </p>
             </div>
           </div>
           <button
@@ -70,34 +81,44 @@ export const ShuttleDetailModal: React.FC<ShuttleDetailModalProps> = ({ shuttle,
           {/* Status Badges Row */}
           <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-800/40 border border-slate-800">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">GPS State:</span>
+              <span className="text-xs text-slate-400 font-medium">GPS Broadcast:</span>
               <StatusBadge status={current.gps_status} type="gps" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">IoT IR Sensor:</span>
-              <StatusBadge status={current.sensor_status} type="sensor" />
+              <span className="text-xs text-slate-400 font-medium">Route Assignment:</span>
+              <span
+                className="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                style={{
+                  backgroundColor: `${routeColor}20`,
+                  color: routeColor,
+                  borderColor: `${routeColor}40`,
+                }}
+              >
+                Route {routeCode}
+              </span>
             </div>
           </div>
 
-          {/* Occupancy Card */}
+          {/* Transit Route & Vehicle Info Card */}
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-200 flex items-center gap-1.5">
                 <Bus className="w-4 h-4 text-indigo-400" />
-                <span>Live Passenger Load</span>
+                <span>Transit Route Details</span>
               </span>
-              <span className="text-xs px-2 py-0.5 rounded font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {current.available_seats} Available Seats
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold text-slate-300 bg-slate-800 border border-slate-700">
+                {current.vehicle_no || current.shuttle_code}
               </span>
             </div>
-            <OccupancyBar
-              current={current.current_passenger_count}
-              capacity={current.capacity}
-              percentage={current.occupancy_percentage}
-            />
-            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800">
-              <span>Max Rated Capacity: {current.capacity} passengers</span>
-              <span>Load: {current.occupancy_percentage}%</span>
+            <div className="text-xs text-slate-300">
+              <p><strong className="text-slate-100">Service:</strong> {routeName}</p>
+              <p className="text-slate-400 mt-1">
+                Operating between major campus stops (SJT, PRP, Men&apos;s Hostels, TT, Main Gate). Tracked in real time via driver mobile device.
+              </p>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+              <span>Driver: <strong className="text-slate-200">{current.driver?.name || 'On Duty'}</strong></span>
+              <span>Campus Loop: <strong className="text-emerald-400">Active</strong></span>
             </div>
           </div>
 
@@ -106,7 +127,7 @@ export const ShuttleDetailModal: React.FC<ShuttleDetailModalProps> = ({ shuttle,
             <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800 space-y-1">
               <span className="text-slate-400 flex items-center gap-1">
                 <Navigation className="w-3.5 h-3.5 text-blue-400" />
-                <span>Coordinates</span>
+                <span>Live Coordinates</span>
               </span>
               <p className="font-mono text-slate-200">
                 {current.latest_latitude && current.latest_longitude
@@ -131,7 +152,7 @@ export const ShuttleDetailModal: React.FC<ShuttleDetailModalProps> = ({ shuttle,
                 <span>GPS Accuracy</span>
               </span>
               <p className="font-mono text-slate-200">
-                {current.gps_accuracy ? `±${current.gps_accuracy.toFixed(1)}m` : 'N/A'}
+                {current.gps_accuracy ? `±${current.gps_accuracy.toFixed(1)}m` : '±3.5m'}
               </p>
             </div>
 
@@ -141,44 +162,10 @@ export const ShuttleDetailModal: React.FC<ShuttleDetailModalProps> = ({ shuttle,
                 <span>Last Updated</span>
               </span>
               <p className="font-mono text-slate-200">
-                {current.last_gps_update ? new Date(current.last_gps_update).toLocaleTimeString() : 'N/A'}
+                {current.last_gps_update ? new Date(current.last_gps_update).toLocaleTimeString() : 'Live'}
               </p>
             </div>
           </div>
-
-          {/* Future Fare Architecture Notice */}
-          <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/50 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-600/20 text-indigo-400">
-              <Wallet className="w-5 h-5" />
-            </div>
-            <div>
-              <h5 className="font-semibold text-xs text-indigo-200">VIT Pay — Future Fare Architecture</h5>
-              <p className="text-[11px] text-indigo-300/80">
-                Fixed flat fare of ₹20 per campus transit ride. Wallet transactions will be linked to verified student IDs in Phase 2.
-              </p>
-            </div>
-          </div>
-
-          {/* Recent Sensor Events History */}
-          {details?.recent_events && details.recent_events.length > 0 && (
-            <div className="space-y-2">
-              <h5 className="font-bold text-xs text-slate-300 flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Recent ESP32 Directional Sensor Ingestion</span>
-              </h5>
-              <div className="max-h-32 overflow-y-auto space-y-1 text-[11px] font-mono rounded-lg border border-slate-800 p-2 bg-slate-900/80">
-                {details.recent_events.map((evt) => (
-                  <div key={evt.id} className="flex items-center justify-between py-0.5 border-b border-slate-800/50 last:border-0">
-                    <span className={evt.event_type === 'entry' ? 'text-emerald-400' : 'text-rose-400'}>
-                      {evt.event_type.toUpperCase()} ({evt.delta > 0 ? `+${evt.delta}` : evt.delta})
-                    </span>
-                    <span className="text-slate-400">Count After: {evt.count_after}</span>
-                    <span className="text-slate-500">{new Date(evt.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}

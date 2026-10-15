@@ -24,11 +24,15 @@ export interface Shuttle {
   id: number;
   shuttle_code: string; // 'SH-01' to 'SH-06'
   name: string;
-  capacity: number;
-  current_passenger_count: number;
-  available_seats: number;
-  occupancy_percentage: number;
-  is_full: boolean;
+  route?: string;
+  route_name?: string;
+  route_color?: string;
+  vehicle_no?: string;
+  capacity?: number;
+  current_passenger_count?: number;
+  available_seats?: number;
+  occupancy_percentage?: number;
+  is_full?: boolean;
   is_tracking_active: boolean;
   latest_latitude?: number | null;
   latest_longitude?: number | null;
@@ -38,7 +42,7 @@ export interface Shuttle {
   last_gps_update?: string | null;
   gps_status: 'active' | 'stale' | 'offline';
   last_sensor_heartbeat?: string | null;
-  sensor_status: 'online' | 'stale' | 'offline' | 'error';
+  sensor_status?: 'online' | 'stale' | 'offline' | 'error';
   driver?: {
     id: number;
     name: string;
@@ -52,6 +56,13 @@ export interface Landmark {
   name: string;
   lat: number;
   lng: number;
+}
+
+export interface CampusRoute {
+  id: string;
+  name: string;
+  color: string;
+  waypoints: [number, number][];
 }
 
 export interface CampusMeta {
@@ -70,6 +81,7 @@ export interface CampusMeta {
   };
   polygon: [number, number][];
   landmarks: Landmark[];
+  routes?: Record<string, CampusRoute>;
 }
 
 export interface LocationTrailPoint {

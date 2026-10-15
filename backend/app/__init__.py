@@ -15,7 +15,8 @@ def seed_initial_fleet(app: Flask):
         db.create_all()
 
         fleet_specs = [
-            {"code": "SH-01", "name": "Campus Express 1", "capacity": 30},
+            {"code": "SH-01", "name": "SJT / PRP Green Express", "vehicle_no": "VIT-A-101", "route": "A", "lat": 12.9729, "lng": 79.1586},
+            {"code": "SH-02", "name": "Mens Hostel Blue Express", "vehicle_no": "VIT-B-202", "route": "B", "lat": 12.9724, "lng": 79.1552},
         ]
 
         for spec in fleet_specs:
@@ -24,12 +25,20 @@ def seed_initial_fleet(app: Flask):
                 new_shuttle = Shuttle(
                     shuttle_code=spec["code"],
                     name=spec["name"],
-                    capacity=spec["capacity"],
+                    route=spec["route"],
+                    vehicle_no=spec["vehicle_no"],
+                    latest_latitude=spec["lat"],
+                    latest_longitude=spec["lng"],
+                    capacity=30,
                     current_passenger_count=0,
-                    is_tracking_active=False,
+                    is_tracking_active=True,
                     sensor_status="offline"
                 )
                 db.session.add(new_shuttle)
+            else:
+                shuttle.route = spec["route"]
+                shuttle.vehicle_no = spec["vehicle_no"]
+                shuttle.name = spec["name"]
 
         # Seed default Administrator if none exists
         admin = User.query.filter_by(role="admin").first()
@@ -43,9 +52,10 @@ def seed_initial_fleet(app: Flask):
             admin_user.set_password("Admin@VIT2026")
             db.session.add(admin_user)
 
-        # Seed default Driver for SH-01
+        # Seed default Drivers for routes
         default_drivers = [
             ("driver1@vitshuttle.campus", "Ramesh Kumar", "SH-01", "TN-23-D-1001", "+91-9876543210"),
+            ("driver2@vitshuttle.campus", "Suresh Patel", "SH-02", "TN-23-D-2002", "+91-9876543211"),
         ]
 
         db.session.commit()

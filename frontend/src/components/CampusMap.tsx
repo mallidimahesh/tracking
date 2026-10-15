@@ -1,17 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { useShuttles } from '../context/ShuttleContext';
 import { Shuttle } from '../types';
-import { Locate, Navigation, Layers, Info } from 'lucide-react';
+import { Locate, Navigation, Layers, Info, Bus, Compass } from 'lucide-react';
 
 export const CampusMap: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
+  const routePolylinesRef = useRef<L.Polyline[]>([]);
   const polygonRef = useRef<L.Polygon | null>(null);
   const landmarkMarkersRef = useRef<L.Marker[]>([]);
+  const selfMarkerRef = useRef<L.Marker | null>(null);
 
   const { shuttles, campusMeta, selectedShuttle, setSelectedShuttle } = useShuttles();
+  const [selfCoords, setSelfCoords] = useState<[number, number] | null>(null);
 
   // Initialize Map
   useEffect(() => {
@@ -21,7 +24,7 @@ export const CampusMap: React.FC = () => {
     const centerLng = campusMeta?.center?.lng ?? 79.1559;
     const zoomLevel = campusMeta?.center?.zoom ?? 16;
 
-    // Create Leaflet Map focused strictly on VIT Vellore Campus
+    // Create Leaflet Map focused on VIT Vellore Campus
     const map = L.map(mapContainerRef.current, {
       center: [centerLat, centerLng],
       zoom: zoomLevel,
@@ -30,7 +33,7 @@ export const CampusMap: React.FC = () => {
       zoomControl: false,
     });
 
-    // Official free OpenStreetMap tiles (no API key required)
+    // Free OpenStreetMap tiles
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
@@ -48,27 +51,125 @@ export const CampusMap: React.FC = () => {
     };
   }, [campusMeta?.center]);
 
-  // Render Campus Boundary Polygon & Landmarks
+  // Track Self User Location
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setSelfCoords([pos.coords.latitude, pos.coords.longitude]);
+      },
+      (err) => {
+        console.warn('Geolocation access not granted:', err);
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // Render Self Marker
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (selfCoords) {
+      const selfIcon = L.divIcon({
+        className: 'pin self-marker',
+        html: `<div style="width: 14px; height: 14px; background: #1e90ff; border: 2.5px solid #ffffff; border-radius: 999px; box-shadow: 0 0 10px #1e90ff;"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+
+      if (selfMarkerRef.current) {
+        selfMarkerRef.current.setLatLng(selfCoords);
+      } else {
+        selfMarkerRef.current = L.marker(selfCoords, { icon: selfIcon })
+          .addTo(map)
+          .bindPopup('<strong style="font-size:12px;">Your Current Location</strong>');
+      }
+    }
+  }, [selfCoords]);
+
+  // Render Route Polylines & Campus Perimeter Polygon & Landmarks
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !campusMeta) return;
 
-    // 1. Campus Boundary Polygon
+    // 1. Campus Perimeter Boundary Polygon
     if (campusMeta.polygon && campusMeta.polygon.length > 0) {
       if (polygonRef.current) {
         polygonRef.current.remove();
       }
-      const poly = L.polygon(campusMeta.polygon, {
+      polygonRef.current = L.polygon(campusMeta.polygon, {
         color: '#6366f1',
-        weight: 2,
-        dashArray: '5, 8',
+        weight: 1.5,
+        dashArray: '4, 6',
         fillColor: '#3b82f6',
-        fillOpacity: 0.06,
+        fillOpacity: 0.04,
       }).addTo(map);
-      polygonRef.current = poly;
     }
 
-    // 2. Campus Landmark Stop Markers
+    // 2. Official Campus Transit Route Polylines (matching D:\tracking)
+    routePolylinesRef.current.forEach((p) => p.remove());
+    routePolylinesRef.current = [];
+
+    const routes = campusMeta.routes || {
+      A: {
+        id: 'A',
+        name: 'SJT / PRP Green Route',
+        color: '#16a34a',
+        waypoints: [
+          [12.9729, 79.1586],
+          [12.9715, 79.1608],
+          [12.9695, 79.1622],
+          [12.9678, 79.1637],
+          [12.9712, 79.1638],
+          [12.9729, 79.1586],
+        ],
+      },
+      B: {
+        id: 'B',
+        name: 'Mens Hostel Blue Route',
+        color: '#2563eb',
+        waypoints: [
+          [12.9724, 79.1552],
+          [12.9709, 79.1531],
+          [12.9686, 79.1518],
+          [12.9669, 79.1507],
+          [12.9692, 79.1559],
+          [12.9724, 79.1552],
+        ],
+      },
+      C: {
+        id: 'C',
+        name: 'Out of Campus Yellow Route',
+        color: '#eab308',
+        waypoints: [
+          [12.9692, 79.1559],
+          [12.968, 79.155],
+          [12.967, 79.154],
+          [12.966, 79.153],
+          [12.9675, 79.152],
+          [12.969, 79.1535],
+          [12.97, 79.155],
+          [12.9692, 79.1559],
+        ],
+      },
+    };
+
+    Object.values(routes).forEach((rt: any) => {
+      if (rt.waypoints && rt.waypoints.length > 1) {
+        const poly = L.polyline(rt.waypoints, {
+          color: rt.color,
+          weight: 4.5,
+          opacity: 0.85,
+          lineJoin: 'round',
+        }).addTo(map);
+        poly.bindPopup(`<strong>${rt.name}</strong><br />Route ${rt.id}`);
+        routePolylinesRef.current.push(poly);
+      }
+    });
+
+    // 3. Landmark Stop Markers
     landmarkMarkersRef.current.forEach((m) => m.remove());
     landmarkMarkersRef.current = [];
 
@@ -77,7 +178,7 @@ export const CampusMap: React.FC = () => {
         const landmarkIcon = L.divIcon({
           className: 'custom-landmark-icon',
           html: `
-            <div style="display: flex; align-items: center; gap: 4px; background: rgba(15, 23, 42, 0.85); color: #cbd5e1; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); font-size: 10px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; gap: 4px; background: rgba(15, 23, 42, 0.88); color: #cbd5e1; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.15); font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.5);">
               <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8;"></span>
               ${lm.name}
             </div>
@@ -92,7 +193,7 @@ export const CampusMap: React.FC = () => {
     }
   }, [campusMeta]);
 
-  // Update Shuttle Markers
+  // Update Rotating Shuttle Markers (matching D:\tracking getBusIcon)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -116,71 +217,49 @@ export const CampusMap: React.FC = () => {
 
       const lat = shuttle.latest_latitude!;
       const lng = shuttle.latest_longitude!;
-
-      // Determine marker color and pulse class
       const isActive = shuttle.gps_status === 'active';
-      let pinColor = '#94a3b8'; // gray offline
-      let badgeBg = '#334155';
+      const heading = shuttle.gps_heading || 0;
+      const routeColor = shuttle.route_color || (shuttle.route === 'B' ? '#2563eb' : shuttle.route === 'C' ? '#eab308' : '#16a34a');
+      const vehicleNo = shuttle.vehicle_no || shuttle.shuttle_code;
+      const routeName = shuttle.route_name || (shuttle.route === 'B' ? 'Mens Hostel Blue Route' : shuttle.route === 'C' ? 'Out of Campus Route' : 'SJT / PRP Green Route');
 
-      if (isActive) {
-        if (shuttle.occupancy_percentage >= 90 || shuttle.is_full) {
-          pinColor = '#f43f5e'; // red full
-          badgeBg = '#e11d48';
-        } else if (shuttle.occupancy_percentage >= 65) {
-          pinColor = '#f59e0b'; // amber busy
-          badgeBg = '#d97706';
-        } else {
-          pinColor = '#10b981'; // green available
-          badgeBg = '#059669';
-        }
-      }
-
-      const shortCode = shuttle.shuttle_code.replace('SH-', '');
-
-      // Create Custom DivIcon
-      const shuttleIcon = L.divIcon({
-        className: 'custom-shuttle-marker',
-        html: `
-          <div style="position: relative; width: 38px; height: 38px; cursor: pointer;">
-            ${isActive ? `<div style="position: absolute; inset: -4px; border-radius: 50%; background: ${pinColor}33; animation: markerPulse 2s infinite ease-in-out;"></div>` : ''}
-            <div style="position: absolute; inset: 0; background: #0f172a; border: 2.5px solid ${pinColor}; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.6);">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${pinColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 6v6"/>
-                <path d="M15 6v6"/>
-                <path d="M2 12h19.6"/>
-                <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/>
-                <circle cx="7" cy="18" r="2"/>
-                <circle cx="15" cy="18" r="2"/>
-              </svg>
-              <span style="font-size: 9px; font-weight: 800; color: #f8fafc; line-height: 1; margin-top: 1px;">${shortCode}</span>
-            </div>
-            <div style="position: absolute; top: -6px; right: -6px; background: ${badgeBg}; color: white; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 9999px; border: 1px solid #0f172a;">
-              ${shuttle.available_seats}
-            </div>
+      // SVG arrow pointing up (N), rotated by shuttle heading (matching D:\tracking\components\MapView.jsx)
+      const busSvgHtml = `
+        <div style="position: relative; width: 34px; height: 34px; display: grid; place-items: center; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));">
+          ${isActive ? `<div style="position: absolute; inset: -4px; border-radius: 50%; background: ${routeColor}33; animation: markerPulse 2s infinite ease-in-out;"></div>` : ''}
+          <div style="transform: rotate(${heading}deg); transition: transform 0.5s ease-out; width: 30px; height: 30px; display: grid; place-items: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="${routeColor}" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
           </div>
-        `,
-        iconSize: [38, 38],
-        iconAnchor: [19, 19],
-        popupAnchor: [0, -22],
+        </div>
+      `;
+
+      const shuttleIcon = L.divIcon({
+        className: `bus-arrow-icon route-${shuttle.route || 'A'}`,
+        html: busSvgHtml,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -20],
       });
 
       const popupHtml = `
-        <div style="padding: 4px; font-family: inherit;">
+        <div style="padding: 4px; font-family: inherit; min-width: 170px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
-            <span style="font-weight: 800; font-size: 14px; color: #38bdf8;">${shuttle.shuttle_code}</span>
-            <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: ${isActive ? '#065f46' : '#334155'}; color: ${isActive ? '#34d399' : '#94a3b8'}; font-weight: 600;">
+            <span style="font-weight: 800; font-size: 14px; color: ${routeColor};">${vehicleNo}</span>
+            <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${isActive ? '#065f46' : '#334155'}; color: ${isActive ? '#34d399' : '#94a3b8'}; font-weight: 700;">
               ${isActive ? 'LIVE GPS' : 'OFFLINE'}
             </span>
           </div>
-          <div style="font-size: 12px; font-weight: 600; color: #f1f5f9; margin-bottom: 4px;">${shuttle.name}</div>
+          <div style="font-size: 12px; font-weight: 700; color: #f1f5f9; margin-bottom: 3px;">${shuttle.name}</div>
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-            Occupancy: <strong style="color: #f8fafc;">${shuttle.current_passenger_count} / ${shuttle.capacity}</strong> (${shuttle.occupancy_percentage}%)
+            Route: <strong style="color: ${routeColor};">${routeName}</strong>
           </div>
-          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-            Available Seats: <strong style="color: #34d399;">${shuttle.available_seats}</strong>
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">
+            Speed: <strong style="color: #f8fafc;">${shuttle.gps_speed ? `${shuttle.gps_speed} km/h` : 'Stopped'}</strong> | Heading: <strong style="color: #f8fafc;">${Math.round(heading)}°</strong>
           </div>
-          <div style="font-size: 10px; color: #64748b; margin-top: 6px;">
-            Sensor: ${shuttle.sensor_status.toUpperCase()} | Speed: ${shuttle.gps_speed ? `${shuttle.gps_speed} km/h` : 'N/A'}
+          <div style="font-size: 10px; color: #64748b; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); pt: 3px;">
+            Driver: ${shuttle.driver?.name || 'On Duty'}
           </div>
         </div>
       `;
@@ -237,13 +316,13 @@ export const CampusMap: React.FC = () => {
       {/* Map Container */}
       <div ref={mapContainerRef} className="w-full h-full" />
 
-      {/* Campus Badge Header Overlay */}
+      {/* Campus Transit Badge Header Overlay */}
       <div className="absolute top-4 left-4 z-[500] pointer-events-none">
         <div className="glass-card px-3.5 py-2 rounded-lg flex items-center gap-2.5 shadow-lg border border-slate-700/80 pointer-events-auto">
-          <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
           <div>
-            <h3 className="text-xs font-bold text-slate-100 tracking-wide">VIT VELLORE CAMPUS</h3>
-            <p className="text-[10px] text-slate-400">Exclusive Geofenced Transit Zone</p>
+            <h3 className="text-xs font-bold text-slate-100 tracking-wide">VIT VELLORE CAMPUS SHUTTLE</h3>
+            <p className="text-[10px] text-slate-400">Live Driver GPS Telemetry & Route Map</p>
           </div>
         </div>
       </div>
@@ -260,28 +339,28 @@ export const CampusMap: React.FC = () => {
         </button>
       </div>
 
-      {/* Map Legend Overlay */}
+      {/* Map Legend Overlay (Route Colors & Self Marker) */}
       <div className="absolute bottom-5 left-5 z-[500] hidden sm:block pointer-events-none">
-        <div className="glass-card px-3 py-2 rounded-lg text-[11px] text-slate-300 space-y-1.5 shadow-lg pointer-events-auto border border-slate-700/70">
-          <div className="font-semibold text-slate-200 text-xs flex items-center gap-1.5 mb-1">
+        <div className="glass-card px-3.5 py-2.5 rounded-lg text-[11px] text-slate-300 space-y-1.5 shadow-lg pointer-events-auto border border-slate-700/70">
+          <div className="font-semibold text-slate-200 text-xs flex items-center gap-1.5 mb-1.5">
             <Info className="w-3.5 h-3.5 text-blue-400" />
-            <span>Fleet Legend</span>
+            <span>Transit Routes</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span>&lt; 65% Seats Available</span>
+            <span className="w-3 h-1.5 rounded-full bg-[#16a34a]" />
+            <span>Route A (SJT / PRP Green Route)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <span>65%–89% Moderately Full</span>
+            <span className="w-3 h-1.5 rounded-full bg-[#2563eb]" />
+            <span>Route B (Mens Hostel Blue Route)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-            <span>&ge; 90% Full or Standing Only</span>
+            <span className="w-3 h-1.5 rounded-full bg-[#eab308]" />
+            <span>Route C (Out of Campus Yellow Route)</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-            <span>Offline / Parked</span>
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-700/50">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#1e90ff] border border-white" />
+            <span>Your Current Location</span>
           </div>
         </div>
       </div>

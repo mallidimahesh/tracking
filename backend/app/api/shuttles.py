@@ -7,6 +7,7 @@ from app.utils.vit_bounds import (
     VIT_CAMPUS_BOUNDS,
     VIT_CAMPUS_POLYGON,
     VIT_CAMPUS_LANDMARKS,
+    VIT_CAMPUS_ROUTES,
     is_within_campus_bounds
 )
 
@@ -66,4 +67,5 @@ def get_campus_meta():
         "bounds": VIT_CAMPUS_BOUNDS,
         "polygon": VIT_CAMPUS_POLYGON,
         "landmarks": VIT_CAMPUS_LANDMARKS,
+        "routes": VIT_CAMPUS_ROUTES,
     }), 200

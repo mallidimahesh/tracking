@@ -3,6 +3,8 @@ import { Shuttle, CampusMeta } from '../types';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 
+export type ShuttleFilter = 'all' | 'active' | 'route-a' | 'route-b' | 'route-c' | 'available' | 'full';
+
 interface ShuttleContextType {
   shuttles: Shuttle[];
   filteredShuttles: Shuttle[];
@@ -11,8 +13,8 @@ interface ShuttleContextType {
   setSelectedShuttle: (shuttle: Shuttle | null) => void;
   isLoading: boolean;
   isSocketConnected: boolean;
-  filter: 'all' | 'active' | 'available' | 'full';
-  setFilter: (filter: 'all' | 'active' | 'available' | 'full') => void;
+  filter: ShuttleFilter;
+  setFilter: (filter: ShuttleFilter) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   refreshFleet: () => Promise<void>;
@@ -28,7 +30,7 @@ export const ShuttleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedShuttle, setSelectedShuttle] = useState<Shuttle | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
-  const [filter, setFilter] = useState<'all' | 'active' | 'available' | 'full'>('all');
+  const [filter, setFilter] = useState<ShuttleFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const refreshFleet = useCallback(async () => {
@@ -190,17 +192,20 @@ export const ShuttleProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Filtered shuttles computed property
   const filteredShuttles = shuttles.filter((shuttle) => {
-    // Search query check (code or name)
+    // Search query check (code, vehicle_no, or name)
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
       searchQuery === '' ||
-      shuttle.shuttle_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shuttle.name.toLowerCase().includes(searchQuery.toLowerCase());
+      shuttle.shuttle_code.toLowerCase().includes(q) ||
+      (shuttle.vehicle_no && shuttle.vehicle_no.toLowerCase().includes(q)) ||
+      shuttle.name.toLowerCase().includes(q);
 
     if (!matchesSearch) return false;
 
-    if (filter === 'active') return shuttle.is_tracking_active && shuttle.gps_status === 'active';
-    if (filter === 'available') return shuttle.available_seats > 0;
-    if (filter === 'full') return shuttle.is_full;
+    if (filter === 'active') return shuttle.is_tracking_active || shuttle.gps_status === 'active';
+    if (filter === 'route-a') return (shuttle.route || 'A').toUpperCase() === 'A';
+    if (filter === 'route-b') return (shuttle.route || '').toUpperCase() === 'B';
+    if (filter === 'route-c') return (shuttle.route || '').toUpperCase() === 'C';
     return true;
   });
 

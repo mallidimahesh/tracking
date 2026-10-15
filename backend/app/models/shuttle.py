@@ -7,6 +7,8 @@ class Shuttle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     shuttle_code = db.Column(db.String(10), unique=True, nullable=False, index=True)  # SH-01 to SH-06
     name = db.Column(db.String(100), nullable=False)
+    route = db.Column(db.String(10), default="A", nullable=False) # 'A', 'B', 'C'
+    vehicle_no = db.Column(db.String(30), nullable=True) # e.g. 'VIT-A-101'
     capacity = db.Column(db.Integer, nullable=False, default=30)
     current_passenger_count = db.Column(db.Integer, nullable=False, default=0)
 
@@ -80,11 +82,22 @@ class Shuttle(db.Model):
     def to_dict(self, include_driver_details=False):
         gps_status = self.get_gps_status()
         sensor_status = self.get_sensor_status()
+        route_code = self.route or "A"
+        route_colors = {"A": "#16a34a", "B": "#2563eb", "C": "#eab308"}
+        route_names = {
+            "A": "SJT / PRP Green Route",
+            "B": "Mens Hostel Blue Route",
+            "C": "Out of Campus Yellow Route"
+        }
 
         data = {
             "id": self.id,
             "shuttle_code": self.shuttle_code,
             "name": self.name,
+            "route": route_code,
+            "route_name": route_names.get(route_code, f"Route {route_code}"),
+            "route_color": route_colors.get(route_code, "#16a34a"),
+            "vehicle_no": self.vehicle_no or self.shuttle_code,
             "capacity": self.capacity,
             "current_passenger_count": self.current_passenger_count,
             "available_seats": self.available_seats,

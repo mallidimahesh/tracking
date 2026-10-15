@@ -27,11 +27,6 @@ export const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Modal States
-  const [correctShuttleId, setCorrectShuttleId] = useState<number | null>(null);
-  const [newCount, setNewCount] = useState<number>(0);
-  const [correctReason, setCorrectReason] = useState<string>('');
-
   const [newDriverEmail, setNewDriverEmail] = useState('');
   const [newDriverName, setNewDriverName] = useState('');
   const [newDriverPassword, setNewDriverPassword] = useState('');
@@ -62,21 +57,6 @@ export const AdminDashboard: React.FC = () => {
       setFeedback({ type: 'error', text: err?.message || 'Failed to load data.' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCorrectCountSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correctShuttleId) return;
-
-    try {
-      await api.admin.correctCount(correctShuttleId, newCount, correctReason);
-      setFeedback({ type: 'success', text: `Passenger count updated with audit trail.` });
-      setCorrectShuttleId(null);
-      setCorrectReason('');
-      await refreshFleet();
-    } catch (err: any) {
-      setFeedback({ type: 'error', text: err?.message || 'Failed to correct occupancy.' });
     }
   };
 
@@ -187,50 +167,62 @@ export const AdminDashboard: React.FC = () => {
         <div className="glass-card rounded-2xl border border-slate-700/80 overflow-hidden shadow-2xl">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-100">Live Fleet Overview</h3>
-            <span className="text-xs text-slate-400">Showing {shuttles.length} Vehicle{shuttles.length === 1 ? ' (SH-01 • 30 Seats)' : ''}</span>
+            <span className="text-xs text-slate-400">Showing {shuttles.length} Registered Transit Vehicles</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-4">Code</th>
-                  <th className="py-3 px-4">Name</th>
-                  <th className="py-3 px-4">Capacity</th>
-                  <th className="py-3 px-4">Passengers</th>
-                  <th className="py-3 px-4">Available</th>
+                  <th className="py-3 px-4">Vehicle No</th>
+                  <th className="py-3 px-4">Shuttle Name</th>
+                  <th className="py-3 px-4">Transit Route</th>
+                  <th className="py-3 px-4">Driver</th>
                   <th className="py-3 px-4">GPS Status</th>
-                  <th className="py-3 px-4">IR Sensor</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4">Speed & Heading</th>
+                  <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {shuttles.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-indigo-400">{s.shuttle_code}</td>
-                    <td className="py-3 px-4 font-medium text-slate-100">{s.name}</td>
-                    <td className="py-3 px-4">{s.capacity}</td>
-                    <td className="py-3 px-4 font-bold text-slate-100">{s.current_passenger_count}</td>
-                    <td className="py-3 px-4 font-bold text-emerald-400">{s.available_seats}</td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={s.gps_status} type="gps" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={s.sensor_status} type="sensor" />
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => {
-                          setCorrectShuttleId(s.id);
-                          setNewCount(s.current_passenger_count);
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 font-semibold text-[11px] border border-slate-700 transition"
-                      >
-                        Adjust Count
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {shuttles.map((s) => {
+                  const routeColor = s.route_color || (s.route === 'B' ? '#2563eb' : s.route === 'C' ? '#eab308' : '#16a34a');
+                  const routeName = s.route_name || (s.route === 'B' ? 'Mens Hostel Blue Route' : s.route === 'C' ? 'Out of Campus Route' : 'SJT / PRP Green Route');
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-800/40 transition">
+                      <td className="py-3 px-4 font-mono font-bold text-indigo-400">
+                        {s.vehicle_no || s.shuttle_code}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-100">{s.name}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold border inline-flex items-center gap-1"
+                          style={{
+                            backgroundColor: `${routeColor}20`,
+                            color: routeColor,
+                            borderColor: `${routeColor}40`,
+                          }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: routeColor }} />
+                          {routeName}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-300">
+                        {s.driver?.name || 'Assigned'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <StatusBadge status={s.gps_status} type="gps" />
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-300">
+                        {s.gps_speed ? `${s.gps_speed} km/h` : '0 km/h'} • {s.gps_heading ? `${Math.round(s.gps_heading)}°` : '0°'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <span className="text-emerald-400 font-semibold text-[11px]">
+                          {s.gps_status === 'active' ? 'Broadcasting' : 'Standby'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -374,61 +366,6 @@ export const AdminDashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* Manual Occupancy Correction Modal */}
-      {correctShuttleId && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <form
-            onSubmit={handleCorrectCountSubmit}
-            className="glass-card w-full max-w-md p-6 rounded-2xl border border-slate-700/80 shadow-2xl space-y-4"
-          >
-            <h4 className="text-base font-extrabold text-slate-100">Manual Occupancy Adjustment</h4>
-            <p className="text-xs text-slate-400">
-              Adjust passenger count with an audit trail recorded in system logs.
-            </p>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">New Passenger Headcount</label>
-              <input
-                type="number"
-                min="0"
-                required
-                value={newCount}
-                onChange={(e) => setNewCount(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-100 font-mono font-bold"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300">Reason for Adjustment</label>
-              <input
-                type="text"
-                required
-                value={correctReason}
-                onChange={(e) => setCorrectReason(e.target.value)}
-                placeholder="e.g. Physical recount at Technology Tower stop"
-                className="w-full px-3 py-2 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-100"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setCorrectShuttleId(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition"
-              >
-                Save Adjustment
-              </button>
-            </div>
-          </form>
         </div>
       )}
     </div>

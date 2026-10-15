@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def register_socket_events():
     @socketio.on("connect")
-    def handle_connect():
+    def handle_connect(auth=None):
         client_sid = request.sid
         logger.info(f"Socket.IO client connected: {client_sid}")
         # Send instant initial snapshot upon connection

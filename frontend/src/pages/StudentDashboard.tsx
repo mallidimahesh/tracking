@@ -11,9 +11,6 @@ import {
   Search,
   Wallet,
   MapPin,
-  Clock,
-  Sparkles,
-  ShieldCheck,
   CheckCircle,
 } from 'lucide-react';
 
@@ -28,13 +25,11 @@ export const StudentDashboard: React.FC = () => {
     setFilter,
     searchQuery,
     setSearchQuery,
-    campusMeta,
   } = useShuttles();
 
   const [detailShuttle, setDetailShuttle] = useState<Shuttle | null>(null);
 
-  const activeCount = shuttles.filter((s) => s.gps_status === 'active').length;
-  const availableCount = shuttles.filter((s) => s.available_seats > 0).length;
+  const activeCount = shuttles.filter((s) => s.gps_status === 'active' || s.is_tracking_active).length;
 
   return (
     <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -63,7 +58,7 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="text-left">
             <div className="text-xs font-bold text-slate-200">Campus Pass: ₹20 / Ride</div>
-            <p className="text-[11px] text-slate-400">Fixed campus shuttle fare • Phase 2 Wallet Ready</p>
+            <p className="text-[11px] text-slate-400">Fixed campus shuttle fare • Mobile NFC Ready</p>
           </div>
         </div>
       </div>
@@ -77,7 +72,7 @@ export const StudentDashboard: React.FC = () => {
               <span>Campus Live Map</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Tracking campus shuttle SH-01 (30 Seats) with live GPS updates every 3–5 seconds.
+              Tracking campus shuttles on Route A (Green), Route B (Blue), Route C (Yellow) with live driver GPS.
             </p>
           </div>
 
@@ -105,14 +100,14 @@ export const StudentDashboard: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <Bus className="w-5 h-5 text-indigo-400" />
-              <span>Campus Shuttle Status (SH-01 • 30 Seats)</span>
+              <span>Campus Shuttle Transit Fleet</span>
             </h3>
             <p className="text-xs text-slate-400">
-              {activeCount} of {shuttles.length} active • {availableCount} shuttles with open seats
+              {activeCount} of {shuttles.length} active shuttles broadcasting live GPS telemetry
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -134,12 +129,36 @@ export const StudentDashboard: React.FC = () => {
                 All
               </button>
               <button
-                onClick={() => setFilter('available')}
+                onClick={() => setFilter('active')}
                 className={`px-2.5 py-1 rounded transition ${
-                  filter === 'available' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                  filter === 'active' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Available Seats
+                Live GPS
+              </button>
+              <button
+                onClick={() => setFilter('route-a')}
+                className={`px-2.5 py-1 rounded transition ${
+                  filter === 'route-a' ? 'bg-[#16a34a] text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Route A
+              </button>
+              <button
+                onClick={() => setFilter('route-b')}
+                className={`px-2.5 py-1 rounded transition ${
+                  filter === 'route-b' ? 'bg-[#2563eb] text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Route B
+              </button>
+              <button
+                onClick={() => setFilter('route-c')}
+                className={`px-2.5 py-1 rounded transition ${
+                  filter === 'route-c' ? 'bg-[#eab308] text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Route C
               </button>
             </div>
           </div>
