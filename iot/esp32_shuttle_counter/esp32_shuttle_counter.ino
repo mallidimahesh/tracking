@@ -59,6 +59,11 @@ void setup() {
   connectWiFi();
 }
 
+// Set to true if testing with 1 IR sensor. Set to false for 2-sensor directional doorway.
+#define SINGLE_SENSOR_MODE true
+
+bool lastSensorAState = false;
+
 void loop() {
   // Ensure Wi-Fi remains connected
   if (WiFi.status() != WL_CONNECTED) {
@@ -68,71 +73,90 @@ void loop() {
     digitalWrite(PIN_STATUS_LED, HIGH);
   }
 
-  // Read IR sensor states (Active LOW: 0 = Obstacle/Person blocking beam, 1 = Clear)
+  // Read IR sensor states (Active LOW: LOW / 0 = Obstacle/Hand detected, HIGH / 1 = Clear)
   bool aBlocked = (digitalRead(PIN_IR_SENSOR_A) == LOW);
   bool bBlocked = (digitalRead(PIN_IR_SENSOR_B) == LOW);
-
   unsigned long now = millis();
 
-  // State Machine for Directional Detection
-  switch (currentState) {
-    case STATE_IDLE:
-      if (aBlocked && !bBlocked) {
-        currentState = STATE_A_FIRST;
-        stateStartTime = now;
-        Serial.println("[IR] Sensor A interrupted (Outer -> Inner attempt)");
-      } else if (bBlocked && !aBlocked) {
-        currentState = STATE_B_FIRST;
-        stateStartTime = now;
-        Serial.println("[IR] Sensor B interrupted (Inner -> Outer attempt)");
-      }
-      break;
+  // Print raw sensor debug to Serial Monitor every time it changes
+  if (aBlocked != lastSensorAState) {
+    Serial.printf("[SENSOR RAW] Sensor A (GPIO 18): %s\n", aBlocked ? "HAND DETECTED (BLOCKED)" : "CLEAR");
+  }
 
-    case STATE_A_FIRST:
-      // If Sensor B is now interrupted within timeout -> Passenger has entered!
-      if (bBlocked) {
-        localPassengerCount++;
-        sequenceNumber++;
-        persistState();
-        Serial.printf("[ENTRY DETECTED] New Count: %d | Seq: %lu\n", localPassengerCount, sequenceNumber);
-        
-        // Blink LED to indicate detection
-        pulseLed();
-
-        // Dispatch entry event to backend
-        sendOccupancyEvent("entry", 1, localPassengerCount);
-
-        // Reset state after debounce delay
-        delay(SENSOR_DEBOUNCE_MS);
-        currentState = STATE_IDLE;
-      } else if (now - stateStartTime > DIRECTION_TIMEOUT_MS) {
-        Serial.println("[IR] Timeout: Person did not complete entry. Resetting state.");
-        currentState = STATE_IDLE;
-      }
-      break;
-
-    case STATE_B_FIRST:
-      // If Sensor A is now interrupted within timeout -> Passenger has exited!
-      if (aBlocked) {
-        if (localPassengerCount > 0) {
-          localPassengerCount--;
+  // =========================================================================
+  // MODE 1: SINGLE-SENSOR MODE (Immediate trigger on hand wave)
+  // =========================================================================
+  if (SINGLE_SENSOR_MODE) {
+    // Edge trigger: Only count when hand enters beam (transition from clear -> blocked)
+    if (aBlocked && !lastSensorAState) {
+      localPassengerCount++;
+      sequenceNumber++;
+      persistState();
+      
+      Serial.printf("\n>>> [HAND DETECTED] Passenger In! Count: %d | Seq: %lu\n", localPassengerCount, sequenceNumber);
+      pulseLed();
+      sendOccupancyEvent("entry", 1, localPassengerCount);
+      
+      delay(400); // Debounce delay to prevent double-counting 1 hand wave
+    }
+    lastSensorAState = aBlocked;
+  }
+  // =========================================================================
+  // MODE 2: DUAL-SENSOR DIRECTIONAL MODE (Doorway A -> B entry, B -> A exit)
+  // =========================================================================
+  else {
+    lastSensorAState = aBlocked;
+    switch (currentState) {
+      case STATE_IDLE:
+        if (aBlocked && !bBlocked) {
+          currentState = STATE_A_FIRST;
+          stateStartTime = now;
+          Serial.println("[IR] Sensor A interrupted (Outer -> Inner attempt)");
+        } else if (bBlocked && !aBlocked) {
+          currentState = STATE_B_FIRST;
+          stateStartTime = now;
+          Serial.println("[IR] Sensor B interrupted (Inner -> Outer attempt)");
         }
-        sequenceNumber++;
-        persistState();
-        Serial.printf("[EXIT DETECTED] New Count: %d | Seq: %lu\n", localPassengerCount, sequenceNumber);
-        
-        pulseLed();
+        break;
 
-        // Dispatch exit event to backend
-        sendOccupancyEvent("exit", -1, localPassengerCount);
+      case STATE_A_FIRST:
+        if (bBlocked) {
+          localPassengerCount++;
+          sequenceNumber++;
+          persistState();
+          Serial.printf("[ENTRY DETECTED] New Count: %d | Seq: %lu\n", localPassengerCount, sequenceNumber);
+          
+          pulseLed();
+          sendOccupancyEvent("entry", 1, localPassengerCount);
 
-        delay(SENSOR_DEBOUNCE_MS);
-        currentState = STATE_IDLE;
-      } else if (now - stateStartTime > DIRECTION_TIMEOUT_MS) {
-        Serial.println("[IR] Timeout: Person did not complete exit. Resetting state.");
-        currentState = STATE_IDLE;
-      }
-      break;
+          delay(SENSOR_DEBOUNCE_MS);
+          currentState = STATE_IDLE;
+        } else if (now - stateStartTime > DIRECTION_TIMEOUT_MS) {
+          Serial.println("[IR] Timeout: Person did not complete entry. Resetting state.");
+          currentState = STATE_IDLE;
+        }
+        break;
+
+      case STATE_B_FIRST:
+        if (aBlocked) {
+          if (localPassengerCount > 0) {
+            localPassengerCount--;
+          }
+          sequenceNumber++;
+          persistState();
+          Serial.printf("[EXIT DETECTED] New Count: %d | Seq: %lu\n", localPassengerCount, sequenceNumber);
+          
+          pulseLed();
+          sendOccupancyEvent("exit", -1, localPassengerCount);
+
+          delay(SENSOR_DEBOUNCE_MS);
+          currentState = STATE_IDLE;
+        } else if (now - stateStartTime > DIRECTION_TIMEOUT_MS) {
+          Serial.println("[IR] Timeout: Person did not complete exit. Resetting state.");
+          currentState = STATE_IDLE;
+        }
+        break;
+    }
   }
 
   // Periodic heartbeat transmission
