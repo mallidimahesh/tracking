@@ -124,9 +124,9 @@ Examples:
             simulate_heartbeat(arg1)
         elif action == "sync":
             count_val = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-            seq = int(time.time())
+            seq = int(time.time() * 1000)
             simulate_event(arg1, "sync", seq, target_count=count_val)
         else:
-            seq = int(sys.argv[3]) if (len(sys.argv) > 3 and sys.argv[3].isdigit() and len(sys.argv[3]) > 6) else int(time.time())
+            seq = int(sys.argv[3]) if (len(sys.argv) > 3 and sys.argv[3].isdigit() and len(sys.argv[3]) > 6) else int(time.time() * 1000)
             simulate_event(arg1, action, seq)
 
