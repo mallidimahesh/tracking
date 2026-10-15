@@ -19,34 +19,41 @@ Before beginning deployment:
 
 ---
 
-## 2. Method A: Automated CloudFormation Deployment (Recommended)
+## 2. Method A: Automated CloudFormation Deployment (All 9 AWS Services)
 
-### Step 1: Deploy CloudFormation Stack
-Run the following command using the AWS CLI:
+The CloudFormation template at `aws/cloudformation.yaml` provisions:
+1. **VPC** (Public & Private subnets across 2 AZs, IGW, Route Tables)
+2. **EC2 App Server** (t2.micro / t3.micro Free Tier, Ubuntu 24.04 LTS, Nginx, Docker)
+3. **RDS PostgreSQL** (db.t3.micro Free Tier) for user authentication & login
+4. **DynamoDB** (`vitshuttle-telemetry-production`, PAY_PER_REQUEST Free Tier) for GPS & IoT streaming
+5. **S3 Assets Bucket** for frontend static files and automated DB backups
+6. **S3 TrailLogs Bucket** for security audit log persistence
+7. **AWS CloudTrail** for management event audit trails
+8. **CloudWatch** LogGroup, High CPU Alarm, and Real-Time Transit Dashboard
+9. **AWS Budgets** ($1.00/month threshold) watchdog alert
 
+### Step 1: Deploy CloudFormation Stack via AWS CLI
 ```bash
-aws cloudformation create-stack \
+aws cloudformation deploy \
+  --template-file aws/cloudformation.yaml \
   --stack-name vit-shuttle-prod \
-  --template-body file://aws/cloudformation.yaml \
-  --parameters \
-      ParameterKey=InstanceType,ParameterValue=t2.micro \
-      ParameterKey=KeyName,ParameterValue=your-keypair-name \
-      ParameterKey=SSHLocation,ParameterValue=$(curl -s https://checkip.amazonaws.com)/32 \
-  --capabilities CAPABILITY_IAM
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+      EnvironmentName=production \
+      InstanceType=t2.micro \
+      DBUsername=vitshuttle_admin \
+      DBPassword="VitShuttle2026SecurePass!" \
+      AlertEmail="transit-admin@vitstudent.ac.in"
 ```
 
-Alternatively, upload `aws/cloudformation.yaml` directly in the **AWS CloudFormation Console**.
+*Alternatively: In the **AWS CloudFormation Console** in your open Chrome tab, click **Create stack** &rarr; **Upload a template file** &rarr; select `aws/cloudformation.yaml`.*
 
-### Step 2: Retrieve Public IP Address
-Wait 2–3 minutes for stack creation to reach `CREATE_COMPLETE`:
-
+### Step 2: Retrieve Infrastructure Outputs
 ```bash
 aws cloudformation describe-stacks \
   --stack-name vit-shuttle-prod \
   --query "Stacks[0].Outputs" --output table
 ```
-
-Note the `InstancePublicIP` from the output.
 
 ---
 
@@ -59,7 +66,7 @@ ssh -i /path/to/your-keypair.pem ubuntu@<INSTANCE_PUBLIC_IP>
 
 ### Step 2: Clone Repository onto Instance
 ```bash
-sudo git clone https://github.com/your-username/vit-shuttle.git /opt/vit-shuttle
+sudo git clone https://github.com/mallidimahesh/tracking.git /opt/vit-shuttle
 sudo chown -R ubuntu:ubuntu /opt/vit-shuttle
 cd /opt/vit-shuttle
 ```
