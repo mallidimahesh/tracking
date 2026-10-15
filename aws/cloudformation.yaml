@@ -1,0 +1,552 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  VIT Shuttle — Smart Campus Transit System (Complete AWS Architecture)
+  Provisions:
+    1. Custom VPC (Public & Private subnets across 2 AZs, IGW, Route Tables)
+    2. Amazon EC2 t2.micro / t3.micro App Server with IAM Instance Profile
+    3. Amazon RDS PostgreSQL Database (db.t3.micro Free Tier) for secure login & user data
+    4. Amazon DynamoDB Table (On-Demand PAY_PER_REQUEST) for real-time telemetry streaming
+    5. Amazon S3 Bucket for frontend static assets and automated database backups
+    6. Amazon S3 TrailLogs Bucket dedicated for security audit trail storage
+    7. AWS CloudTrail for audit logging across all management events
+    8. Amazon CloudWatch LogGroup, CPU Utilization Alarm, and Transit Dashboard
+    9. AWS Budgets alert ($1.00/month threshold) to prevent unexpected charges
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Environment name tag.
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t4g.micro
+    Description: EC2 instance type eligible for AWS 12-Month Free Tier.
+
+  KeyName:
+    Type: String
+    Default: ""
+    Description: (Optional) Name of an existing EC2 KeyPair for SSH access. Leave empty if using SSM Session Manager.
+
+  SSHLocation:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: IP CIDR range permitted for SSH access.
+
+  DBUsername:
+    Type: String
+    Default: vitshuttle_admin
+    Description: Master username for RDS PostgreSQL.
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: "VitShuttle2026SecurePass!"
+    Description: Master password for RDS PostgreSQL (Min 8 chars).
+
+  AlertEmail:
+    Type: String
+    Default: "transit-admin@vitstudent.ac.in"
+    Description: Email address to receive AWS Budget threshold notifications.
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+
+Resources:
+  # =========================================================================
+  # 1. NETWORKING (VPC, Subnets in 2 AZs, Internet Gateway)
+  # =========================================================================
+  TransitVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-vpc-${EnvironmentName}'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-igw-${EnvironmentName}'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TransitVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnet 1 (AZ 1)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransitVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-public-sub1-${EnvironmentName}'
+
+  # Public Subnet 2 (AZ 2)
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransitVPC
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-public-sub2-${EnvironmentName}'
+
+  # Private Subnet 1 (AZ 1 for RDS)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransitVPC
+      CidrBlock: 10.0.10.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-private-sub1-${EnvironmentName}'
+
+  # Private Subnet 2 (AZ 2 for RDS)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TransitVPC
+      CidrBlock: 10.0.20.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-private-sub2-${EnvironmentName}'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TransitVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-public-rt-${EnvironmentName}'
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # =========================================================================
+  # 2. SECURITY GROUPS (EC2 & RDS)
+  # =========================================================================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP 80, HTTPS 443, and SSH 22
+      VpcId: !Ref TransitVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Web HTTP traffic
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Secure HTTPS and WebSockets
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH Management
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-ec2-sg-${EnvironmentName}'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: PostgreSQL access strictly from EC2 instance
+      VpcId: !Ref TransitVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: PostgreSQL strictly from EC2 App Server
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-rds-sg-${EnvironmentName}'
+
+  # =========================================================================
+  # 3. RDS DATABASE FOR LOGIN & TRANSIT USERS (AWS Free Tier)
+  # =========================================================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for VIT Shuttle RDS Database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-db-subnetgroup-${EnvironmentName}'
+
+  TransitDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'vitshuttle-db-${EnvironmentName}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: "15"
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: vitshuttle
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-db-${EnvironmentName}'
+
+  # =========================================================================
+  # 4. AMAZON DYNAMODB TABLE (Real-Time GPS & IoT Telemetry Stream)
+  # =========================================================================
+  TelemetryDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'vitshuttle-telemetry-${EnvironmentName}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: shuttle_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: shuttle_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: VIT-Shuttle
+
+  # =========================================================================
+  # 5. S3 BUCKET (Static Frontend & Backups)
+  # =========================================================================
+  TransitS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vitshuttle-assets-${AWS::AccountId}-${EnvironmentName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-assets-${EnvironmentName}'
+
+  # =========================================================================
+  # 6. S3 TRAILLOGS BUCKET & CLOUDTRAIL
+  # =========================================================================
+  TrailLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vitshuttle-traillogs-${AWS::AccountId}-${EnvironmentName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-traillogs-${EnvironmentName}'
+
+  TrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrailLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt TrailLogsBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${TrailLogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  TransitCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: TrailLogsBucketPolicy
+    Properties:
+      TrailName: !Sub 'vitshuttle-audit-trail-${EnvironmentName}'
+      S3BucketName: !Ref TrailLogsBucket
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: false
+      EnableLogFileValidation: true
+      Tags:
+        - Key: Project
+          Value: VIT-Shuttle
+
+  # =========================================================================
+  # 7. CLOUDWATCH LOGS, ALARM & DASHBOARD
+  # =========================================================================
+  TransitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vitshuttle/${EnvironmentName}'
+      RetentionInDays: 14
+
+  EC2HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vitshuttle-high-cpu-${EnvironmentName}'
+      AlarmDescription: Trigger alarm if EC2 CPU exceeds 80% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TransitInstance
+
+  TransitDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'VITShuttle-Transit-Dashboard-${EnvironmentName}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/EC2", "CPUUtilization", "InstanceId", "${TransitInstance}" ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "EC2 App Server CPU Utilization (%)"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${TelemetryDynamoTable}" ],
+                  [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${TelemetryDynamoTable}" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Real-Time Telemetry Throughput"
+              }
+            }
+          ]
+        }
+
+  # =========================================================================
+  # 8. AWS BUDGETS ($1.00 USD Free Tier Watchdog)
+  # =========================================================================
+  FreeTierBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub 'vitshuttle-monthly-freetier-budget-${EnvironmentName}'
+        BudgetLimit:
+          Amount: 1.0
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+  # =========================================================================
+  # 9. IAM ROLE & EC2 INSTANCE
+  # =========================================================================
+  EC2AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'vitshuttle-ec2-role-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: DynamoAndS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !GetAtt TelemetryDynamoTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${TransitS3Bucket.Arn}/*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2AppRole
+
+  TransitInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AttachGateway
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: ami-0dee22c13ea7a9a67 # Standard Ubuntu 24.04 LTS (Update for your region)
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          apt-get update -y
+          apt-get install -y curl git ufw nginx python3-pip python3-venv certbot python3-certbot-nginx
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+
+          ufw allow 22/tcp
+          ufw allow 80/tcp
+          ufw allow 443/tcp
+          ufw --force enable
+
+          mkdir -p /opt/vit-shuttle
+          chown -R ubuntu:ubuntu /opt/vit-shuttle
+          echo "VIT Shuttle EC2 instance bootstrap ready." > /var/log/vitshuttle-init.log
+      Tags:
+        - Key: Name
+          Value: !Sub 'vitshuttle-app-server-${EnvironmentName}'
+        - Key: Project
+          Value: VIT-Shuttle
+
+Outputs:
+  ApplicationURL:
+    Description: URL to access the VIT Shuttle web application
+    Value: !Sub 'http://${TransitInstance.PublicIp}'
+
+  InstancePublicIP:
+    Description: Public IP of the EC2 Instance
+    Value: !GetAtt TransitInstance.PublicIp
+
+  RDSEndpoint:
+    Description: PostgreSQL RDS Endpoint for Login and User Authentication
+    Value: !GetAtt TransitDatabase.Endpoint.Address
+
+  DynamoDBTableName:
+    Description: DynamoDB Table for Real-Time Telemetry and GPS streaming
+    Value: !Ref TelemetryDynamoTable
+
+  S3AssetsBucket:
+    Description: S3 Bucket for Static Assets and Backups
+    Value: !Ref TransitS3Bucket
+
+  CloudTrailLogsBucket:
+    Description: S3 Bucket storing CloudTrail audit logs
+    Value: !Ref TrailLogsBucket
+
+  CloudWatchDashboardURL:
+    Description: CloudWatch Monitoring Dashboard
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home#dashboards:name=${TransitDashboard}'

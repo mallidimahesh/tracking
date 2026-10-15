@@ -1,0 +1,29 @@
+[Unit]
+Description=VIT Shuttle Flask-SocketIO Backend Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/vit-shuttle/backend
+Environment="PATH=/opt/vit-shuttle/backend/venv/bin:/usr/bin"
+EnvironmentFile=/opt/vit-shuttle/backend/.env
+
+# Run Gunicorn with Gevent worker for persistent WebSocket connections
+ExecStart=/opt/vit-shuttle/backend/venv/bin/gunicorn \
+    --worker-class gevent \
+    --workers 1 \
+    --bind 127.0.0.1:5000 \
+    --access-logfile /var/log/vitshuttle/access.log \
+    --error-logfile /var/log/vitshuttle/error.log \
+    --timeout 120 \
+    run:app
+
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=vitshuttle-backend
+
+[Install]
+WantedBy=multi-user.target

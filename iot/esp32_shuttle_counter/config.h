@@ -1,0 +1,39 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// ==========================================
+// VIT Shuttle ESP32 Sensor Configuration
+// Configured for Vivo Y11 5G Hotspot
+// ==========================================
+
+// Wi-Fi Credentials for your Vivo Y11 5G Mobile Hotspot
+#define WIFI_SSID "vivo Y11 5G"
+#define WIFI_PASSWORD "9618498888"
+
+// Backend API Server (Replace with your laptop's IP address on the hotspot)
+// To find your laptop's IP after connecting your laptop to the Vivo hotspot:
+// Open PowerShell/CMD and type 'ipconfig'. Look for IPv4 Address under Wi-Fi adapter.
+#define BACKEND_BASE_URL "http://10.148.151.64:5000"
+
+// Device & Shuttle Assignment for SH-01
+#define SHUTTLE_ID 1
+#define SHUTTLE_CODE "SH-01"
+#define DEVICE_CODE "ESP32-SH01"
+#define DEVICE_API_KEY "vit_esp32_key_sh-01"
+#define FIRMWARE_VERSION "1.2.0"
+
+// Hardware Pin Definitions (ESP32 DevKit V1)
+// Sensor A is positioned near the outer doorway entrance
+// Sensor B is positioned slightly inside (5-10cm apart)
+#define PIN_IR_SENSOR_A 18  // Outer Door Sensor (Active LOW for common IR obstacle modules)
+#define PIN_IR_SENSOR_B 19  // Inner Cabin Sensor
+#define PIN_STATUS_LED  2   // Onboard Blue LED (GPIO 2)
+#define PIN_BUZZER      4   // Optional audio feedback buzzer
+
+// Timing & Debounce Configuration
+#define SENSOR_DEBOUNCE_MS 150       // Minimum beam break duration to ignore noise
+#define DIRECTION_TIMEOUT_MS 2000    // Max time between Sensor A & B trigger to validate direction
+#define HEARTBEAT_INTERVAL_MS 30000  // Heartbeat ping interval (30 seconds)
+#define RETRY_BACKOFF_BASE_MS 1000   // Network retry backoff base
+
+#endif // CONFIG_H
