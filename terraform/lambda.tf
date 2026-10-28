@@ -5,7 +5,7 @@
 data "archive_file" "backend_zip" {
   type        = "zip"
   source_file = "${path.module}/../backend_lambda/index.js"
-  output_path = "${path.module}/build/backend_lambda.zip"
+  output_path = "/tmp/backend_lambda.zip"
 }
 
 # IAM Role for Lambda
