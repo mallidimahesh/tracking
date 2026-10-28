@@ -1,0 +1,7 @@
+{
+  "name": "vit-shuttle-backend-lambda",
+  "version": "1.0.0",
+  "description": "AWS Serverless Lambda Backend for VIT Shuttle Track",
+  "main": "index.js",
+  "type": "commonjs"
+}

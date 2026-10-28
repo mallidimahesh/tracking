@@ -1,0 +1,65 @@
+{
+  "users": [
+    {
+      "id": "adm-001",
+      "role": "admin",
+      "name": "Campus Admin",
+      "regNo": "ADMIN",
+      "email": "admin@campus.shuttle",
+      "password": "admin123",
+      "needsPasswordReset": false
+    },
+    {
+      "id": "drv-001",
+      "role": "driver",
+      "name": "Driver 1",
+      "regNo": "DRV01",
+      "email": "drv01@campus.shuttle",
+      "password": "driver123",
+      "needsPasswordReset": false
+    },
+    {
+      "id": "drv-002",
+      "role": "driver",
+      "name": "Driver 2",
+      "regNo": "DRV02",
+      "email": "drv02@campus.shuttle",
+      "password": "driver123",
+      "needsPasswordReset": false
+    }
+  ],
+  "wallets": {
+    "adm-001": 0,
+    "drv-001": 0,
+    "drv-002": 0
+  },
+  "dues": {},
+  "shuttles": [
+    {
+      "id": "bus-001",
+      "vehicleNo": "VIT-A-101",
+      "driverId": "drv-001",
+      "route": "A",
+      "status": "running",
+      "lat": 12.9729,
+      "lng": 79.1586,
+      "heading": 0,
+      "lastSeen": "2026-10-28T17:30:00.000Z"
+    },
+    {
+      "id": "bus-002",
+      "vehicleNo": "VIT-B-202",
+      "driverId": "drv-002",
+      "route": "B",
+      "status": "running",
+      "lat": 12.9724,
+      "lng": 79.1552,
+      "heading": 0,
+      "lastSeen": "2026-10-28T17:30:00.000Z"
+    }
+  ],
+  "transactions": [],
+  "alerts": [],
+  "hotlist": {},
+  "cards": {}
+}
