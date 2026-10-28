@@ -6,20 +6,31 @@ set -e
 # Region: ap-southeast-2 (Sydney) | Cost: $0 Idle / Free-Tier Optimized
 # ==============================================================================
 
-echo "🚀 [1/5] Checking environment..."
+echo "🚀 [1/5] Checking environment and freeing disk space..."
 export AWS_DEFAULT_REGION="ap-southeast-2"
 echo "Target AWS Region: $AWS_DEFAULT_REGION"
 
-# Install Terraform if not present (e.g. fresh AWS CloudShell instance)
+# CloudShell 1GB disk space optimization: route large Terraform plugins to /tmp
+export TF_DATA_DIR="/tmp/terraform_data"
+export TF_PLUGIN_CACHE_DIR="/tmp/terraform_cache"
+mkdir -p /tmp/terraform_data /tmp/terraform_cache
+
+# Clean package manager and temporary caches to ensure maximum free space
+sudo dnf clean all 2>/dev/null || sudo yum clean all 2>/dev/null || true
+rm -rf ~/.npm /tmp/terraform_cache/* 2>/dev/null || true
+
+# Install Terraform if not present
 if ! command -v terraform &> /dev/null; then
-    echo "📦 Terraform not found. Installing Terraform in CloudShell..."
+    echo "📦 Installing Terraform..."
     sudo yum install -y yum-utils
     sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
     sudo yum -y install terraform
+    sudo yum clean all || true
 fi
 
 echo "📦 [2/5] Installing project dependencies..."
-npm install
+npm install --prefer-offline --no-audit --no-fund
+npm cache clean --force 2>/dev/null || true
 
 echo "🏗️ [3/5] Building frontend bundle..."
 STATIC_EXPORT=true npm run build || true
@@ -40,7 +51,6 @@ if [ -d "out" ]; then
     aws s3 sync out/ "s3://$S3_BUCKET/" --delete --region ap-southeast-2
 elif [ -d ".next" ]; then
     aws s3 sync .next/ "s3://$S3_BUCKET/.next/" --region ap-southeast-2
-    aws s3 cp pages/ "s3://$S3_BUCKET/pages/" --recursive --region ap-southeast-2 || true
 fi
 
 echo ""
